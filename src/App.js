@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Plus, AlertTriangle, CheckCircle } from 'lucide-react';
 import axios from 'axios';
-https://hourlytracker.onrender.com
+const API_URL = 'https://annotation-api.onrender.com';
 const AnnotationTracker = () => {
   const [entries, setEntries] = useState([]);
   const [formData, setFormData] = useState({
