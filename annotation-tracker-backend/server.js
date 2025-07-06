@@ -1,38 +1,34 @@
-// server.js - Memory Optimized Version
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+require('dotenv').config();
 
 const app = express();
 
-// ✅ Optimize Express settings for memory
-app.use(express.json({ limit: '1mb' })); // Limit request size
-app.use(cors({
-  origin: ['http://localhost:3000', 'https://hourlytracker.onrender.com'],
-  methods: ['GET', 'POST', 'DELETE'],
-  allowedHeaders: ['Content-Type']
-}));
+// ✅ Middleware
+app.use(express.json());
+app.use(cors());
 
-// ✅ MongoDB connection with memory optimization
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://tomandjerry8095:CfABQ2bA3H3Uvh4c@salman.zxcybpm.mongodb.net/annotation-tracker?retryWrites=true&w=majority&appName=salman';
+// ✅ MongoDB Connection - Updated for your database
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://tomandjerry8095:CfABQ2bA3H3Uvh4c@salman.zxcybpm.mongodb.net/hourlytracker?retryWrites=true&w=majority&appName=salman';
 
 mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-  maxPoolSize: 5, // Limit connection pool size
-  serverSelectionTimeoutMS: 5000, // Timeout after 5s
-  socketTimeoutMS: 45000, // Close sockets after 45s
-  bufferMaxEntries: 0 // Disable mongoose buffering
+  maxPoolSize: 5,
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+  bufferMaxEntries: 0
 })
 .then(() => {
-  console.log("✅ MongoDB connected");
+  console.log("✅ MongoDB connected to 'hourlytracker' database");
 })
 .catch(err => {
   console.error("❌ MongoDB connection failed:", err);
   process.exit(1);
 });
 
-// ✅ Optimized Schema
+// ✅ Schema - Updated to match your frontend data structure
 const EntrySchema = new mongoose.Schema({
   userName: { type: String, required: true, maxlength: 50 },
   qaName: { type: String, required: true, maxlength: 10 },
@@ -43,35 +39,39 @@ const EntrySchema = new mongoose.Schema({
   date: { type: String, required: true, maxlength: 10 },
   timestamp: { type: Date, default: Date.now }
 }, {
-  timestamps: false // Disable automatic timestamps to save memory
+  timestamps: false
 });
 
 // Add index for better query performance
 EntrySchema.index({ date: 1, userName: 1 });
 
+// ✅ Model - This will create the 'entries' collection
 const Entry = mongoose.model('Entry', EntrySchema);
 
 // ✅ Root endpoint
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'API Running',
+    message: 'Hourly Tracker API Running',
     status: 'OK',
+    database: 'hourlytracker',
+    collection: 'entries',
     memory: process.memoryUsage()
   });
 });
 
-// ✅ GET entries with pagination to avoid memory issues
+// ✅ GET entries - Fixed to work with your frontend
 app.get('/entries', async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 1000; // Default limit
+    const limit = parseInt(req.query.limit) || 1000;
     const skip = parseInt(req.query.skip) || 0;
     
     const entries = await Entry.find()
       .sort({ timestamp: -1 })
       .limit(limit)
       .skip(skip)
-      .lean(); // Use lean() for better performance
+      .lean();
     
+    console.log(`✅ Retrieved ${entries.length} entries from database`);
     res.json(entries);
   } catch (err) {
     console.error('❌ Error fetching entries:', err);
@@ -79,7 +79,7 @@ app.get('/entries', async (req, res) => {
   }
 });
 
-// ✅ POST new entry
+// ✅ POST new entry - Fixed to match your frontend structure
 app.post('/entries', async (req, res) => {
   try {
     const requiredFields = ['userName', 'qaName', 'annotationCount', 'anticipatedCount', 'timeSlot', 'location', 'date'];
@@ -92,6 +92,7 @@ app.post('/entries', async (req, res) => {
       });
     }
     
+    // Create new entry with data from frontend
     const newEntry = new Entry({
       userName: req.body.userName.trim(),
       qaName: req.body.qaName.trim(),
@@ -99,21 +100,31 @@ app.post('/entries', async (req, res) => {
       anticipatedCount: parseInt(req.body.anticipatedCount),
       timeSlot: req.body.timeSlot.trim(),
       location: req.body.location.trim(),
-      date: req.body.date.trim()
+      date: req.body.date.trim(),
+      timestamp: req.body.timestamp ? new Date(req.body.timestamp) : new Date()
     });
     
     const savedEntry = await newEntry.save();
+    
+    console.log(`✅ Entry saved successfully:`, {
+      id: savedEntry._id,
+      userName: savedEntry.userName,
+      date: savedEntry.date,
+      timeSlot: savedEntry.timeSlot
+    });
+    
     res.json({ success: true, entry: savedEntry });
   } catch (err) {
     console.error('❌ Error saving entry:', err);
-    res.status(500).json({ error: 'Failed to save entry' });
+    res.status(500).json({ error: 'Failed to save entry', details: err.message });
   }
 });
 
-// ✅ DELETE all entries
+// ✅ DELETE all entries - Fixed to match your frontend
 app.delete('/entries', async (req, res) => {
   try {
     const result = await Entry.deleteMany({});
+    console.log(`✅ Deleted ${result.deletedCount} entries from database`);
     res.json({ success: true, deletedCount: result.deletedCount });
   } catch (err) {
     console.error('❌ Error deleting entries:', err);
@@ -122,31 +133,37 @@ app.delete('/entries', async (req, res) => {
 });
 
 // ✅ GET entry count
-app.post('/entries', async (req, res) => {
+app.get('/entries/count', async (req, res) => {
   try {
-    // Your logic to save entry to MongoDB
-    const entry = new Entry(req.body); // Assuming you have an Entry model
-    await entry.save();
-    res.json({ success: true, entry });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+    const count = await Entry.countDocuments();
+    res.json({ count });
+  } catch (err) {
+    console.error('❌ Error counting entries:', err);
+    res.status(500).json({ error: 'Failed to count entries' });
   }
 });
 
-app.get('/entries', async (req, res) => {
+// ✅ GET entries by date (optional - useful for filtering)
+app.get('/entries/:date', async (req, res) => {
   try {
-    // Your logic to fetch entries from MongoDB
-    const entries = await Entry.find();
+    const { date } = req.params;
+    const entries = await Entry.find({ date }).sort({ timestamp: -1 }).lean();
     res.json(entries);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  } catch (err) {
+    console.error('❌ Error fetching entries by date:', err);
+    res.status(500).json({ error: 'Failed to fetch entries by date' });
   }
 });
 
-// ✅ Error handling
+// ✅ Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('❌ Error:', err);
+  console.error('❌ Server Error:', err);
   res.status(500).json({ error: 'Internal server error' });
+});
+
+// ✅ Handle 404 routes
+app.use('*', (req, res) => {
+  res.status(404).json({ error: 'Route not found' });
 });
 
 // ✅ Graceful shutdown
@@ -173,4 +190,6 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`💾 Memory usage: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)} MB`);
+  console.log(`🔗 Database: hourlytracker`);
+  console.log(`📋 Collection: entries`);
 });
