@@ -4,15 +4,23 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 
 const app = express();
-app.use(cors());
+
+// ✅ CORS: Allow frontend domain hosted on Render
+app.use(cors({
+  origin: 'https://hourlytracker.onrender.com'  // ✅ your frontend deployed URL
+}));
+
 app.use(express.json());
 
-mongoose.connect('mongodb+srv://tomandjerry8095:CfABQ2bA3H3Uvh4c@salman.zxcybpm.mongodb.net/?retryWrites=true&w=majority&appName=salman', {
+// ✅ Connect to MongoDB
+mongoose.connect('mongodb+srv://tomandjerry8095:CfABQ2bA3H3Uvh4c@salman.zxcybpm.mongodb.net/annotation-tracker?retryWrites=true&w=majority&appName=salman', {
   useNewUrlParser: true,
   useUnifiedTopology: true
-}).then(() => console.log("MongoDB connected"))
-  .catch(err => console.error(err));
+})
+.then(() => console.log("✅ MongoDB connected"))
+.catch(err => console.error("❌ MongoDB connection failed:", err));
 
+// ✅ Schema and model
 const EntrySchema = new mongoose.Schema({
   userName: String,
   qaName: String,
@@ -26,24 +34,37 @@ const EntrySchema = new mongoose.Schema({
 
 const Entry = mongoose.model('Entry', EntrySchema);
 
-// GET all entries
+// ✅ GET all entries
 app.get('/entries', async (req, res) => {
-  const entries = await Entry.find().sort({ timestamp: -1 });
-  res.json(entries);
+  try {
+    const entries = await Entry.find().sort({ timestamp: -1 });
+    res.json(entries);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch entries' });
+  }
 });
 
-// POST a new entry
+// ✅ POST new entry
 app.post('/entries', async (req, res) => {
-  const newEntry = new Entry(req.body);
-  await newEntry.save();
-  res.json({ success: true, entry: newEntry });
+  try {
+    const newEntry = new Entry(req.body);
+    await newEntry.save();
+    res.json({ success: true, entry: newEntry });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save entry' });
+  }
 });
 
-// DELETE all entries (optional)
+// ✅ DELETE all entries
 app.delete('/entries', async (req, res) => {
-  await Entry.deleteMany({});
-  res.json({ success: true });
+  try {
+    await Entry.deleteMany({});
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete entries' });
+  }
 });
 
-const PORT = 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// ✅ Start server (use dynamic port for Render)
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
