@@ -122,26 +122,25 @@ app.delete('/entries', async (req, res) => {
 });
 
 // ✅ GET entry count
-app.get('/entries/count', async (req, res) => {
+app.post('/entries', async (req, res) => {
   try {
-    const count = await Entry.countDocuments();
-    res.json({ count });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to count entries' });
+    // Your logic to save entry to MongoDB
+    const entry = new Entry(req.body); // Assuming you have an Entry model
+    await entry.save();
+    res.json({ success: true, entry });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-// ✅ Memory monitoring endpoint
-app.get('/memory', (req, res) => {
-  const memUsage = process.memoryUsage();
-  res.json({
-    memory: {
-      rss: `${Math.round(memUsage.rss / 1024 / 1024)} MB`,
-      heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)} MB`,
-      heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)} MB`,
-      external: `${Math.round(memUsage.external / 1024 / 1024)} MB`
-    }
-  });
+app.get('/entries', async (req, res) => {
+  try {
+    // Your logic to fetch entries from MongoDB
+    const entries = await Entry.find();
+    res.json(entries);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ✅ Error handling
