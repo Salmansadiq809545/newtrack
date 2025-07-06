@@ -1,92 +1,87 @@
-// server.js
+// server.js - Memory Optimized Version
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 
 const app = express();
 
-// ✅ CORS: Allow frontend domain hosted on Render
+// ✅ Optimize Express settings for memory
+app.use(express.json({ limit: '1mb' })); // Limit request size
 app.use(cors({
   origin: ['http://localhost:3000', 'https://hourlytracker.onrender.com'],
   methods: ['GET', 'POST', 'DELETE'],
   allowedHeaders: ['Content-Type']
 }));
 
-app.use(express.json());
-
-// ✅ Connect to MongoDB with better error handling
-const MONGODB_URI = 'mongodb+srv://tomandjerry8095:CfABQ2bA3H3Uvh4c@salman.zxcybpm.mongodb.net/annotation-tracker?retryWrites=true&w=majority&appName=salman';
+// ✅ MongoDB connection with memory optimization
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://tomandjerry8095:CfABQ2bA3H3Uvh4c@salman.zxcybpm.mongodb.net/annotation-tracker?retryWrites=true&w=majority&appName=salman';
 
 mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
-  useUnifiedTopology: true
+  useUnifiedTopology: true,
+  maxPoolSize: 5, // Limit connection pool size
+  serverSelectionTimeoutMS: 5000, // Timeout after 5s
+  socketTimeoutMS: 45000, // Close sockets after 45s
+  bufferMaxEntries: 0 // Disable mongoose buffering
 })
 .then(() => {
-  console.log("✅ MongoDB connected successfully");
-  console.log("📊 Database name:", mongoose.connection.db.databaseName);
+  console.log("✅ MongoDB connected");
 })
 .catch(err => {
   console.error("❌ MongoDB connection failed:", err);
   process.exit(1);
 });
 
-// ✅ Monitor connection status
-mongoose.connection.on('connected', () => {
-  console.log('📡 Mongoose connected to MongoDB');
-});
-
-mongoose.connection.on('error', (err) => {
-  console.error('❌ Mongoose connection error:', err);
-});
-
-mongoose.connection.on('disconnected', () => {
-  console.log('📡 Mongoose disconnected');
-});
-
-// ✅ Schema and model
+// ✅ Optimized Schema
 const EntrySchema = new mongoose.Schema({
-  userName: { type: String, required: true },
-  qaName: { type: String, required: true },
-  annotationCount: { type: Number, required: true },
-  anticipatedCount: { type: Number, required: true },
-  timeSlot: { type: String, required: true },
-  location: { type: String, required: true },
-  date: { type: String, required: true },
-  timestamp: { type: String, default: () => new Date().toISOString() }
+  userName: { type: String, required: true, maxlength: 50 },
+  qaName: { type: String, required: true, maxlength: 10 },
+  annotationCount: { type: Number, required: true, min: 0 },
+  anticipatedCount: { type: Number, required: true, min: 0 },
+  timeSlot: { type: String, required: true, maxlength: 10 },
+  location: { type: String, required: true, maxlength: 20 },
+  date: { type: String, required: true, maxlength: 10 },
+  timestamp: { type: Date, default: Date.now }
 }, {
-  timestamps: true // This adds createdAt and updatedAt automatically
+  timestamps: false // Disable automatic timestamps to save memory
 });
+
+// Add index for better query performance
+EntrySchema.index({ date: 1, userName: 1 });
 
 const Entry = mongoose.model('Entry', EntrySchema);
 
-// ✅ Root endpoint for testing
+// ✅ Root endpoint
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'Annotation Tracker API is running!',
-    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
-    timestamp: new Date().toISOString()
+    message: 'API Running',
+    status: 'OK',
+    memory: process.memoryUsage()
   });
 });
 
-// ✅ GET all entries with better error handling
+// ✅ GET entries with pagination to avoid memory issues
 app.get('/entries', async (req, res) => {
   try {
-    console.log('📊 Fetching all entries...');
-    const entries = await Entry.find().sort({ timestamp: -1 });
-    console.log(`📊 Found ${entries.length} entries`);
+    const limit = parseInt(req.query.limit) || 1000; // Default limit
+    const skip = parseInt(req.query.skip) || 0;
+    
+    const entries = await Entry.find()
+      .sort({ timestamp: -1 })
+      .limit(limit)
+      .skip(skip)
+      .lean(); // Use lean() for better performance
+    
     res.json(entries);
   } catch (err) {
     console.error('❌ Error fetching entries:', err);
-    res.status(500).json({ error: 'Failed to fetch entries', details: err.message });
+    res.status(500).json({ error: 'Failed to fetch entries' });
   }
 });
 
-// ✅ POST new entry with validation
+// ✅ POST new entry
 app.post('/entries', async (req, res) => {
   try {
-    console.log('📝 Creating new entry:', req.body);
-    
-    // Validate required fields
     const requiredFields = ['userName', 'qaName', 'annotationCount', 'anticipatedCount', 'timeSlot', 'location', 'date'];
     const missingFields = requiredFields.filter(field => !req.body[field]);
     
@@ -97,60 +92,86 @@ app.post('/entries', async (req, res) => {
       });
     }
     
-    const newEntry = new Entry(req.body);
-    const savedEntry = await newEntry.save();
+    const newEntry = new Entry({
+      userName: req.body.userName.trim(),
+      qaName: req.body.qaName.trim(),
+      annotationCount: parseInt(req.body.annotationCount),
+      anticipatedCount: parseInt(req.body.anticipatedCount),
+      timeSlot: req.body.timeSlot.trim(),
+      location: req.body.location.trim(),
+      date: req.body.date.trim()
+    });
     
-    console.log('✅ Entry saved successfully:', savedEntry._id);
+    const savedEntry = await newEntry.save();
     res.json({ success: true, entry: savedEntry });
   } catch (err) {
     console.error('❌ Error saving entry:', err);
-    res.status(500).json({ error: 'Failed to save entry', details: err.message });
+    res.status(500).json({ error: 'Failed to save entry' });
   }
 });
 
-// ✅ DELETE all entries with confirmation
+// ✅ DELETE all entries
 app.delete('/entries', async (req, res) => {
   try {
-    console.log('🗑️ Deleting all entries...');
     const result = await Entry.deleteMany({});
-    console.log(`🗑️ Deleted ${result.deletedCount} entries`);
     res.json({ success: true, deletedCount: result.deletedCount });
   } catch (err) {
     console.error('❌ Error deleting entries:', err);
-    res.status(500).json({ error: 'Failed to delete entries', details: err.message });
+    res.status(500).json({ error: 'Failed to delete entries' });
   }
 });
 
-// ✅ GET entries count (for debugging)
+// ✅ GET entry count
 app.get('/entries/count', async (req, res) => {
   try {
     const count = await Entry.countDocuments();
     res.json({ count });
   } catch (err) {
-    console.error('❌ Error counting entries:', err);
     res.status(500).json({ error: 'Failed to count entries' });
   }
 });
 
-// ✅ Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('❌ Unhandled error:', err);
-  res.status(500).json({ error: 'Internal server error', details: err.message });
+// ✅ Memory monitoring endpoint
+app.get('/memory', (req, res) => {
+  const memUsage = process.memoryUsage();
+  res.json({
+    memory: {
+      rss: `${Math.round(memUsage.rss / 1024 / 1024)} MB`,
+      heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)} MB`,
+      heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)} MB`,
+      external: `${Math.round(memUsage.external / 1024 / 1024)} MB`
+    }
+  });
 });
 
-// ✅ Start server (use dynamic port for Render)
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🌐 API URL: http://localhost:${PORT}`);
-  console.log(`📊 Database: ${mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'}`);
+// ✅ Error handling
+app.use((err, req, res, next) => {
+  console.error('❌ Error:', err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 // ✅ Graceful shutdown
 process.on('SIGTERM', () => {
-  console.log('👋 SIGTERM received, shutting down gracefully');
+  console.log('👋 Shutting down gracefully');
   mongoose.connection.close(() => {
-    console.log('📡 MongoDB connection closed');
     process.exit(0);
   });
+});
+
+// ✅ Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('❌ Uncaught Exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('❌ Unhandled Rejection:', err);
+  process.exit(1);
+});
+
+// ✅ Start server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`💾 Memory usage: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)} MB`);
 });
