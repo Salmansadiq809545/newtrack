@@ -1,19 +1,12 @@
 {
-  "name": "hourly-tracker",
-  "version": "0.1.0",
+  "name": "hourly-tracker-client",
+  "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "@testing-library/dom": "^10.4.0",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.3.0",
-    "@testing-library/user-event": "^13.5.0",
     "axios": "^1.10.0",
     "chart.js": "^4.5.0",
     "chartjs-plugin-datalabels": "^2.2.0",
-    "cors": "^2.8.5",
-    "git": "^0.1.5",
     "lucide-react": "^0.525.0",
-    "mongodb": "^6.17.0",
     "papaparse": "^5.5.3",
     "react": "^19.1.0",
     "react-chartjs-2": "^5.3.0",
@@ -23,18 +16,12 @@
     "web-vitals": "^2.1.4",
     "xlsx": "^0.18.5"
   },
-
-
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "start": "node server.js",
-    "start": "serve -s build",
-    "build": "react-scripts build"
+    "eject": "react-scripts eject"
   },
- 
   "eslintConfig": {
     "extends": [
       "react-app",
@@ -42,15 +29,7 @@
     ]
   },
   "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "production": [">0.2%", "not dead", "not op_mini all"],
+    "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
   }
 }
