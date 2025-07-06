@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Plus, AlertTriangle, CheckCircle } from 'lucide-react';
-import axios from 'axios';
+import { Download, Plus, AlertTriangle, CheckCircle, Server, Wifi, WifiOff } from 'lucide-react';
 
 const API_URL = 'https://hourlytracker.onrender.com';
 
-
-
-
 const AnnotationTracker = () => {
   const [entries, setEntries] = useState([]);
+  const [serverStatus, setServerStatus] = useState('checking');
   const [formData, setFormData] = useState({
     userName: '',
     qaName: '',
@@ -18,66 +15,151 @@ const AnnotationTracker = () => {
     location: '',
     date: new Date().toISOString().split('T')[0]
   });
- const handleInputChange = (e) => {
+
+  const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
+
   const locations = [
-  { value: 'vyom', label: 'Vyom' },
-  { value: 'rcity', label: 'RCity' },
-  { value: 'rsm', label: 'RSM' }
-];
+    { value: 'vyom', label: 'Vyom' },
+    { value: 'rcity', label: 'RCity' },
+    { value: 'rsm', label: 'RSM' }
+  ];
+
   const timeSlots = ['9-10', '10-11', '11-12', '12-1', '1-2', '2-3', '3-4', '4-5', '5-6'];
-  // Load data from localStorage on component mount
-  // Replace useEffect for loading entries
-useEffect(() => {
-  axios.get(`${API_URL}/entries`)
-    .then(res => setEntries(res.data))
-    .catch(err => console.error(err));
-}, []);
 
-// ✅ Submit entry to MongoDB
-const handleSubmit = async () => {
-  if (!formData.userName || !formData.qaName || !formData.annotationCount || !formData.timeSlot || !formData.location || !formData.date || !formData.anticipatedCount) {
-    alert('Please fill all fields');
-    return;
-  }
-
-  const newEntry = {
-    ...formData,
-    annotationCount: parseInt(formData.annotationCount),
-    anticipatedCount: parseInt(formData.anticipatedCount),
-    timestamp: new Date().toISOString()
+  // Check server status
+  const checkServerStatus = async () => {
+    try {
+      const response = await fetch(`${API_URL}/`, { 
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (response.ok) {
+        setServerStatus('online');
+        console.log('✅ Server is online');
+      } else {
+        setServerStatus('offline');
+        console.log('❌ Server returned error:', response.status);
+      }
+    } catch (error) {
+      setServerStatus('offline');
+      console.log('❌ Server connection failed:', error);
+    }
   };
 
-  try {
-    const res = await axios.post(`${API_URL}/entries`, newEntry);
-    setEntries(prev => [...prev, res.data.entry]);
-    setFormData({
-      userName: '',
-      qaName: '',
-      annotationCount: '',
-      anticipatedCount: '',
-      timeSlot: '',
-      location: '',
-      date: new Date().toISOString().split('T')[0]
-    });
-  } catch (err) {
-    console.error('Failed to save entry', err);
-  }
-};
-
-// 🧹 Clear all data
-const clearAllData = async () => {
-  if (window.confirm('Are you sure you want to clear all data?')) {
+  // Load entries with better error handling
+  const loadEntries = async () => {
     try {
-      await axios.delete(`${API_URL}/entries`);
+      const response = await fetch(`${API_URL}/entries`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setEntries(Array.isArray(data) ? data : []);
+      console.log('✅ Entries loaded successfully');
+    } catch (error) {
+      console.error('❌ Failed to load entries:', error);
       setEntries([]);
-    } catch (err) {
-      console.error('Failed to clear data', err);
     }
-  }
-};
+  };
+
+  // Initialize on component mount
+  useEffect(() => {
+    const initialize = async () => {
+      await checkServerStatus();
+      await loadEntries();
+    };
+    initialize();
+  }, []);
+
+  // Submit entry with better error handling
+  const handleSubmit = async () => {
+    if (!formData.userName || !formData.qaName || !formData.annotationCount || !formData.timeSlot || !formData.location || !formData.date || !formData.anticipatedCount) {
+      alert('Please fill all fields');
+      return;
+    }
+
+    const newEntry = {
+      ...formData,
+      annotationCount: parseInt(formData.annotationCount),
+      anticipatedCount: parseInt(formData.anticipatedCount),
+      timestamp: new Date().toISOString()
+    };
+
+    try {
+      const response = await fetch(`${API_URL}/entries`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newEntry)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setEntries(prev => [...prev, result.entry]);
+        setFormData({
+          userName: '',
+          qaName: '',
+          annotationCount: '',
+          anticipatedCount: '',
+          timeSlot: '',
+          location: '',
+          date: new Date().toISOString().split('T')[0]
+        });
+        alert('Entry added successfully!');
+        console.log('✅ Entry saved successfully');
+      } else {
+        throw new Error('Failed to save entry');
+      }
+    } catch (error) {
+      console.error('❌ Failed to save entry:', error);
+      alert(`Failed to save entry: ${error.message}`);
+    }
+  };
+
+  // Clear all data with better error handling
+  const clearAllData = async () => {
+    if (window.confirm('Are you sure you want to clear all data?')) {
+      try {
+        const response = await fetch(`${API_URL}/entries`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        
+        if (result.success) {
+          setEntries([]);
+          alert('All data cleared successfully!');
+          console.log('✅ Data cleared successfully');
+        } else {
+          throw new Error('Failed to clear data');
+        }
+      } catch (error) {
+        console.error('❌ Failed to clear data:', error);
+        alert(`Failed to clear data: ${error.message}`);
+      }
+    }
+  };
 
   const getUserStats = () => {
     const userStats = {};
@@ -110,75 +192,69 @@ const clearAllData = async () => {
     return Object.values(userStats);
   };
 
-const downloadExcel = () => {
-  const userStats = getUserStats();
+  const downloadExcel = () => {
+    const userStats = getUserStats();
 
-  let htmlTable = `﻿<table border="1" style="border-collapse: collapse; font-family: Arial, sans-serif;">
-    <thead>
-      <tr style="background-color: #f3f4f6; font-weight: bold;">
-        <th style="padding: 8px; text-align: center;">S. No.</th>
-        <th style="padding: 8px; text-align: center;">User Name</th>
-        <th style="padding: 8px; text-align: center;">Location</th>
-        <th style="padding: 8px; text-align: center;">Date</th>
-        <th style="padding: 8px; text-align: center;">QA Name</th>
-        ${timeSlots.map(slot => `<th style="padding: 8px; text-align: center;">${slot}</th>`).join('')}
-        <th style="padding: 8px; text-align: center;">Total Annotations</th>
-        <th style="padding: 8px; text-align: center;">Anticipated Count</th>
-        <th style="padding: 8px; text-align: center;">Met 30/hr (%)</th>
-        <th style="padding: 8px; text-align: center;">Met 500/day</th>
-      </tr>
-    </thead>
-    <tbody>`;
+    let htmlTable = `﻿<table border="1" style="border-collapse: collapse; font-family: Arial, sans-serif;">
+      <thead>
+        <tr style="background-color: #f3f4f6; font-weight: bold;">
+          <th style="padding: 8px; text-align: center;">S. No.</th>
+          <th style="padding: 8px; text-align: center;">User Name</th>
+          <th style="padding: 8px; text-align: center;">Location</th>
+          <th style="padding: 8px; text-align: center;">Date</th>
+          <th style="padding: 8px; text-align: center;">QA Name</th>
+          ${timeSlots.map(slot => `<th style="padding: 8px; text-align: center;">${slot}</th>`).join('')}
+          <th style="padding: 8px; text-align: center;">Total Annotations</th>
+          <th style="padding: 8px; text-align: center;">Anticipated Count</th>
+          <th style="padding: 8px; text-align: center;">Met 30/hr (%)</th>
+          <th style="padding: 8px; text-align: center;">Met 500/day</th>
+        </tr>
+      </thead>
+      <tbody>`;
 
-  userStats.forEach((user, index) => {
-    const hourlyCounts = timeSlots.map(slot => {
-      const count = user.timeSlots[slot];
-      if (count == null) return '<td style="padding: 6px; text-align: center;">-</td>';
-      const bgColor = count < 30 ? '#f87171' : '#4ade80'; // red/green
-      return `<td style="background-color:${bgColor}; color:#fff; padding: 6px; text-align: center;">${count}</td>`;
+    userStats.forEach((user, index) => {
+      const hourlyCounts = timeSlots.map(slot => {
+        const count = user.timeSlots[slot];
+        if (count == null) return '<td style="padding: 6px; text-align: center;">-</td>';
+        const bgColor = count < 30 ? '#f87171' : '#4ade80';
+        return `<td style="background-color:${bgColor}; color:#fff; padding: 6px; text-align: center;">${count}</td>`;
+      });
+
+      const metSlots = Object.values(user.timeSlots).filter(c => c >= 30).length;
+      const totalSlots = Object.values(user.timeSlots).length;
+      const percentMet = totalSlots ? ((metSlots / totalSlots) * 100).toFixed(2) + '%' : '0%';
+
+      const anticipated = entries
+        .filter(e => e.userName === user.userName && e.date === user.date && e.location === user.location)
+        .reduce((sum, e) => sum + (e.anticipatedCount || 0), 0);
+
+      const anticipatedColor = anticipated < 30 ? '#f87171' : '#4ade80';
+      const totalColor = user.totalAnnotations >= 500 ? '#4ade80' : '#f87171';
+
+      htmlTable += `<tr>
+        <td style="padding: 6px; text-align: center;">${index + 1}</td>
+        <td style="padding: 6px; text-align: center;">${user.userName}</td>
+        <td style="padding: 6px; text-align: center;">${user.location}</td>
+        <td style="padding: 6px; text-align: center;">${user.date}</td>
+        <td style="padding: 6px; text-align: center;">${user.qaName}</td>
+        ${hourlyCounts.join('')}
+        <td style="background-color:${totalColor}; color:#fff; padding: 6px; text-align: center;">${user.totalAnnotations}</td>
+        <td style="background-color:${anticipatedColor}; color:#fff; padding: 6px; text-align: center;">${anticipated}</td>
+        <td style="padding: 6px; text-align: center;">${percentMet}</td>
+        <td style="padding: 6px; text-align: center;">${user.hasLowTotal ? 'NO' : 'YES'}</td>
+      </tr>`;
     });
 
-    const metSlots = Object.values(user.timeSlots).filter(c => c >= 30).length;
-    const totalSlots = Object.values(user.timeSlots).length;
-    const percentMet = totalSlots ? ((metSlots / totalSlots) * 100).toFixed(2) + '%' : '0%';
+    htmlTable += `</tbody></table>`;
 
-    const anticipated = entries
-      .filter(e => e.userName === user.userName && e.date === user.date && e.location === user.location)
-      .reduce((sum, e) => sum + (e.anticipatedCount || 0), 0);
-
-    const anticipatedColor = anticipated < 30 ? '#f87171' : '#4ade80';
-    const totalColor = user.totalAnnotations >= 500 ? '#4ade80' : '#f87171';
-
-    htmlTable += `<tr>
-      <td style="padding: 6px; text-align: center;">${index + 1}</td>
-      <td style="padding: 6px; text-align: center;">${user.userName}</td>
-      <td style="padding: 6px; text-align: center;">${user.location}</td>
-      <td style="padding: 6px; text-align: center;">${user.date}</td>
-      <td style="padding: 6px; text-align: center;">${user.qaName}</td>
-      ${hourlyCounts.join('')}
-      <td style="background-color:${totalColor}; color:#fff; padding: 6px; text-align: center;">${user.totalAnnotations}</td>
-      <td style="background-color:${anticipatedColor}; color:#fff; padding: 6px; text-align: center;">${anticipated}</td>
-      <td style="padding: 6px; text-align: center;">${percentMet}</td>
-      <td style="padding: 6px; text-align: center;">${user.hasLowTotal ? 'NO' : 'YES'}</td>
-    </tr>`;
-  });
-
-  htmlTable += `</tbody></table>`;
-
-  const blob = new Blob([htmlTable], { type: 'application/vnd.ms-excel' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `annotation_report_${new Date().toISOString().split('T')[0]}.xls`;
-  link.click();
-  URL.revokeObjectURL(url);
-};
-
-
-
-
-
-  
+    const blob = new Blob([htmlTable], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `annotation_report_${new Date().toISOString().split('T')[0]}.xls`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   const userStats = getUserStats();
 
@@ -186,7 +262,55 @@ const downloadExcel = () => {
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <h1 className="text-3xl font-bold text-gray-800 mb-6">Annotation Tracker Dashboard</h1>
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-3xl font-bold text-gray-800">Annotation Tracker Dashboard</h1>
+            
+            {/* Server Status Indicator */}
+            <div className="flex items-center gap-2">
+              {serverStatus === 'checking' && (
+                <div className="flex items-center gap-2 text-yellow-600">
+                  <Server className="animate-pulse" size={20} />
+                  <span>Checking server...</span>
+                </div>
+              )}
+              {serverStatus === 'online' && (
+                <div className="flex items-center gap-2 text-green-600">
+                  <Wifi size={20} />
+                  <span>Server Online</span>
+                </div>
+              )}
+              {serverStatus === 'offline' && (
+                <div className="flex items-center gap-2 text-red-600">
+                  <WifiOff size={20} />
+                  <span>Server Offline</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Error Warning */}
+          {serverStatus === 'offline' && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-2 text-red-700">
+                <AlertTriangle size={20} />
+                <strong>Connection Error</strong>
+              </div>
+              <p className="text-red-600 mt-2">
+                Cannot connect to the server. Please check:
+              </p>
+              <ul className="list-disc list-inside text-red-600 mt-2 space-y-1">
+                <li>Your internet connection</li>
+                <li>Server deployment status on Render</li>
+                <li>MongoDB connection in your backend</li>
+              </ul>
+              <button 
+                onClick={checkServerStatus}
+                className="mt-3 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+              >
+                Retry Connection
+              </button>
+            </div>
+          )}
           
           {/* Form */}
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
@@ -199,23 +323,25 @@ const downloadExcel = () => {
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter user name"
+                disabled={serverStatus === 'offline'}
               />
             </div>
             
-          <div>
-  <label className="block text-sm font-medium text-gray-700 mb-2">QA Name</label>
-  <select
-    name="qaName"
-    value={formData.qaName}
-    onChange={handleInputChange}
-    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-  >
-    <option value="">Select QA</option>
-    {['QA1', 'QA2', 'QA3', 'QA4', 'QA5', 'QA6', 'QA7', 'QA8'].map(qa => (
-      <option key={qa} value={qa}>{qa}</option>
-    ))}
-  </select>
-</div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">QA Name</label>
+              <select
+                name="qaName"
+                value={formData.qaName}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={serverStatus === 'offline'}
+              >
+                <option value="">Select QA</option>
+                {['QA1', 'QA2', 'QA3', 'QA4', 'QA5', 'QA6', 'QA7', 'QA8'].map(qa => (
+                  <option key={qa} value={qa}>{qa}</option>
+                ))}
+              </select>
+            </div>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Annotation Count</label>
@@ -227,20 +353,23 @@ const downloadExcel = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter count"
                 min="0"
+                disabled={serverStatus === 'offline'}
               />
             </div>
+            
             <div>
-  <label className="block text-sm font-medium text-gray-700 mb-2">Anticipated Count</label>
-  <input
-    type="number"
-    name="anticipatedCount"
-    value={formData.anticipatedCount}
-    onChange={handleInputChange}
-    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-    placeholder="Enter anticipated count"
-    min="0"
-  />
-</div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Anticipated Count</label>
+              <input
+                type="number"
+                name="anticipatedCount"
+                value={formData.anticipatedCount}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter anticipated count"
+                min="0"
+                disabled={serverStatus === 'offline'}
+              />
+            </div>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Time Slot</label>
@@ -249,6 +378,7 @@ const downloadExcel = () => {
                 value={formData.timeSlot}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={serverStatus === 'offline'}
               >
                 <option value="">Select time slot</option>
                 {timeSlots.map(slot => (
@@ -264,6 +394,7 @@ const downloadExcel = () => {
                 value={formData.location}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={serverStatus === 'offline'}
               >
                 <option value="">Select location</option>
                 {locations.map(loc => (
@@ -280,6 +411,7 @@ const downloadExcel = () => {
                 value={formData.date}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={serverStatus === 'offline'}
               />
             </div>
             
@@ -287,7 +419,8 @@ const downloadExcel = () => {
               <button
                 type="button"
                 onClick={handleSubmit}
-                className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                disabled={serverStatus === 'offline'}
+                className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:bg-gray-400"
               >
                 <Plus size={20} />
                 Add Entry
@@ -298,7 +431,8 @@ const downloadExcel = () => {
               <button
                 type="button"
                 onClick={clearAllData}
-                className="w-full bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                disabled={serverStatus === 'offline'}
+                className="w-full bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors flex items-center justify-center gap-2 disabled:bg-gray-400"
               >
                 Clear Data
               </button>
@@ -408,8 +542,8 @@ const downloadExcel = () => {
                 </tr>
               </thead>
               <tbody>
-                {entries.slice(-10).reverse().map((entry) => (
-                  <tr key={entry.id} className={entry.annotationCount < 30 ? 'bg-red-50' : 'bg-white'}>
+                {entries.slice(-10).reverse().map((entry, index) => (
+                  <tr key={entry._id || index} className={entry.annotationCount < 30 ? 'bg-red-50' : 'bg-white'}>
                     <td className="border border-gray-300 px-4 py-2">{entry.userName}</td>
                     <td className="border border-gray-300 px-4 py-2">{entry.qaName}</td>
                     <td className="border border-gray-300 px-4 py-2">{entry.location}</td>
