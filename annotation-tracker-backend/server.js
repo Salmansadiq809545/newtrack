@@ -7,7 +7,9 @@ const app = express();
 
 // ✅ CORS: Allow frontend domain hosted on Render
 app.use(cors({
-  origin: 'https://hourlytracker.onrender.com'  // ✅ your frontend deployed URL
+  origin: ['http://localhost:3000', 'https://hourlytracker.onrender.com'],
+  methods: ['GET', 'POST', 'DELETE'],
+  allowedHeaders: ['Content-Type']
 }));
 
 app.use(express.json());
