@@ -4,7 +4,9 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: 'https://hourlytracker.onrender.com/  // replace with your frontend's actual URL
+}));
 app.use(express.json());
 
 mongoose.connect('mongodb+srv://tomandjerry8095:CfABQ2bA3H3Uvh4c@salman.zxcybpm.mongodb.net/?retryWrites=true&w=majority&appName=salman', {
