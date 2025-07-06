@@ -172,32 +172,7 @@ const downloadExcel = () => {
 
 
 
-const exportToExcel = () => {
-    const locationEntries = getCurrentLocationEntries();
-    const userSummary = getUserSummary();
-    
-    let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "Location,User Name,QA Name,";
-    timeSlots.forEach(slot => csvContent += `${slot},`);
-    csvContent += "Total Annotations,Entry Count,Performance Status\n";
-    
-    userSummary.forEach(user => {
-      const performance = isLowPerformer(user) ? "NEEDS ATTENTION" : "GOOD";
-      csvContent += `${selectedLocation},${user.userName},${user.qaName},`;
-      timeSlots.forEach(slot => {
-        csvContent += `${user.timeSlots[slot] || 0},`;
-      });
-      csvContent += `${user.totalAnnotations},${user.entryCount},${performance}\n`;
-    });
-    
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `annotation_report_${selectedLocation}_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+
 
 
   
